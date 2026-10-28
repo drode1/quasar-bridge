@@ -45,6 +45,7 @@ type Client struct {
 	Model           string
 	APIKey          string
 	API             string
+	PiScript        string
 	ReasoningEffort string
 	MaxOutputTokens int
 	HostedTools     []string
@@ -90,6 +91,11 @@ func (c *Client) chat(ctx context.Context, messages []Message, structured bool, 
 			return Message{}, errors.New("LLM chat parameters require chat_completions API")
 		}
 		return c.responses(ctx, messages, structured, tools)
+	case "pi":
+		if len(c.ChatParameters) > 0 {
+			return Message{}, errors.New("LLM chat parameters require chat_completions API")
+		}
+		return c.pi(ctx, messages, structured, tools)
 	default:
 		return Message{}, errors.New("unsupported LLM API")
 	}

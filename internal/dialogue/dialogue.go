@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+	"uuid"
 
 	"quasarbridge/internal/llm"
 )
@@ -48,6 +49,7 @@ type turn struct {
 	private      bool
 }
 type entry struct {
+	sessionID     string
 	turns         []turn
 	replay        []turn
 	replayReady   bool
@@ -60,6 +62,7 @@ type entry struct {
 }
 type Snapshot struct {
 	Messages       []llm.Message
+	SessionID      string
 	PrivateHistory bool
 }
 type Ticket struct {
@@ -87,6 +90,7 @@ func (s *Store) expired(e *entry) bool {
 func snapshot(e *entry) Snapshot {
 	var v Snapshot
 	if e != nil {
+		v.SessionID = e.sessionID
 		for _, t := range e.turns {
 			v.Messages = append(v.Messages, llm.Message{Role: "user", Content: t.user}, llm.Message{Role: "assistant", Content: t.answer})
 			v.PrivateHistory = v.PrivateHistory || t.private
@@ -105,6 +109,7 @@ func (s *Store) View(ctx context.Context) Snapshot {
 		e.turns = nil
 		e.replay = nil
 		e.replayReady = false
+		e.sessionID = uuid.NewV4().String()
 		if !e.pending {
 			delete(s.entries, key(ctx))
 			e = nil
@@ -123,6 +128,7 @@ func (s *Store) Begin(ctx context.Context) (Snapshot, Ticket) {
 			e.turns = nil
 			e.replay = nil
 			e.replayReady = false
+			e.sessionID = uuid.NewV4().String()
 			if !e.pending {
 				delete(s.entries, k)
 			}
@@ -141,13 +147,14 @@ func (s *Store) Begin(ctx context.Context) (Snapshot, Ticket) {
 			}
 			delete(s.entries, oldest)
 		}
-		e = new(entry)
+		e = &entry{sessionID: uuid.NewV4().String()}
 		s.entries[k] = e
 	}
 	if s.expired(e) {
 		e.turns = nil
 		e.replay = nil
 		e.replayReady = false
+		e.sessionID = uuid.NewV4().String()
 	}
 	var replay *replayState
 	if e.replayReady && len(e.replay) > 0 {
@@ -183,6 +190,7 @@ func (s *Store) Commit(ctx context.Context, ticket Ticket, user, answer string, 
 	}
 	if utf8.RuneCountInString(user)+utf8.RuneCountInString(answer) > s.cfg.MaxChars {
 		e.turns = nil
+		e.sessionID = uuid.NewV4().String()
 		return true
 	}
 	e.turns = append(e.turns, turn{user: user, answer: answer, private: private})
@@ -273,5 +281,6 @@ func (s *Store) Clear(ctx context.Context, ticket Ticket) bool {
 		return false
 	}
 	s.entries[ticket.key].turns = nil
+	s.entries[ticket.key].sessionID = uuid.NewV4().String()
 	return true
 }

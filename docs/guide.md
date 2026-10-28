@@ -109,7 +109,7 @@ chmod 600 config.json runtime.env
 В `config.json` задайте:
 
 - `mode`: `hybrid`;
-- `llm_base_url`: базовый URL API **с `/v1`, без `/chat/completions` или `/responses`**;
+- `llm_base_url`: базовый URL API **с `/v1`, без `/chat/completions` или `/responses`**. Для Pi не нужен;
 - `llm_model`: точный идентификатор доступной модели;
 - `home_warm_area`: при необходимости имя области HA, например `Кабинет`.
 
@@ -155,6 +155,64 @@ JSON для классификации и планирования запраш�
 а результат проверяется мостом; серверная гарантия JSON-схемы здесь не
 используется. Некорректный JSON приводит к штатной обработке ошибки,
 а не к выполнению непроверенного плана.
+
+### Pi SDK
+
+Pi backend использует `@earendil-works/pi-ai` как дочерний процесс Node.js.
+Он не запускает Pi CLI и не выполняет инструменты Pi. Инструменты и их
+ограничения остаются в Quasar Bridge.
+
+Установите Node.js версии не ниже 22.19 и зависимости адаптера. Например,
+зависимости можно установить в каталоге проекта через Docker:
+
+```sh
+docker run --rm -v "$PWD/pi-backend:/work" -w /work node:22 npm ci --ignore-scripts
+```
+
+Добавьте в `config.json` следующие поля. Укажите абсолютный путь к адаптеру
+на том хосте, где работает мост:
+
+```json
+{
+  "mode": "hybrid",
+  "llm_api": "pi",
+  "llm_pi_script": "/opt/quasar-bridge/pi-backend/adapter.mjs",
+  "llm_model": "opencode-go/iceman-contributor-free"
+}
+```
+
+Укажите ключ в `QUASAR_LLM_API_KEY`. Для OpenCode Go требуется ключ workspace
+с подпиской Go. `Iceman Contributor Free` бесплатна на ограниченное время.
+Её запросы и ответы могут использоваться для улучшения модели. Ознакомьтесь
+с [условиями Go](https://opencode.ai/v2/docs/console/go) до отправки данных.
+Для Iceman в настройках workspace **Settings → Privacy** требуется включить
+**Allow paid endpoints that train on request data**. Это разрешение действует
+на workspace, а не только на эту модель.
+Go предназначен для coding agent traffic. Допустимость голосового ассистента
+уточните у провайдера.
+
+При каждом запросе мост запускает адаптер как дочерний процесс. Историю и
+исполнение инструментов контролирует мост. Структурированный вывод через Pi
+поддерживается для моделей с API `openai-completions`. Остальные API возвращают
+ошибку при запросе структурированного вывода.
+Если каталог не подтверждает поддержку JSON mode, мост запрашивает JSON в
+инструкции и проверяет ответ. Серверная гарантия формата в этом случае
+отсутствует. Iceman не поддерживает JSON mode.
+
+Pi SDK выбирает лимит вывода по метаданным модели. Поле
+`llm_max_output_tokens` для Pi не применяется. Если модели OpenCode Go нет
+в каталоге установленного SDK, адаптер получает её метаданные из
+`https://models.dev/api.json` при каждом вызове. Ключ и содержимое диалога
+в этот каталог не отправляются. При его недоступности в журнале `query failed` будет `unknown model`.
+Загрузка каталога увеличивает задержку. При
+`classifier_error` из-за таймаута увеличьте `routing.classifier.timeout_ms`
+с учётом задержки вашей сети и модели.
+
+`llm_base_url` для Pi заменяет базовый URL модели из каталога.
+`llm_reasoning_effort` передаётся провайдеру как reasoning effort.
+`llm_chat_parameters` и `llm_hosted_tools` для Pi не поддерживаются. Pi и
+Node.js не входят в стандартный пакет YAM. Совместимость и расход ресурсов на
+колонке требуют отдельной проверки.
 
 Для [Responses API OpenAI](https://developers.openai.com/api/docs/guides/migrate-to-responses)
 выберите `llm_api: "responses"`. Это позволяет использовать reasoning-модели

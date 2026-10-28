@@ -31,6 +31,7 @@ __pycache__/
 *.pyc
 
 /dist/
+/pi-backend/node_modules/
 *.yap
 *.jsonl
 *.jsonl.*

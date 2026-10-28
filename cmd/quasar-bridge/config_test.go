@@ -33,6 +33,26 @@ func TestReadConfigLLMAPISettings(t *testing.T) {
 		})
 	}
 }
+func TestPiConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		body  string
+		valid bool
+	}{
+		{"enabled", `{"mode":"hybrid","llm_api":"pi","llm_pi_script":"/opt/pi-backend/index.mjs","llm_model":"opencode-go/iceman-contributor-free"}`, true},
+		{"missing script", `{"llm_api":"pi"}`, false},
+		{"missing provider", `{"mode":"hybrid","llm_api":"pi","llm_pi_script":"adapter.mjs","llm_model":"model"}`, false},
+		{"chat parameters", `{"llm_api":"pi","llm_pi_script":"adapter.mjs","llm_chat_parameters":{"temperature":0}}`, false},
+		{"hosted tools", `{"llm_api":"pi","llm_pi_script":"adapter.mjs","llm_hosted_tools":["web_search"]}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := readConfig(configFile(t, tc.body))
+			if (err == nil) != tc.valid {
+				t.Fatalf("valid=%v, error=%v", tc.valid, err)
+			}
+		})
+	}
+}
 
 func TestReadConfigLLMAPIEnvironmentOverrides(t *testing.T) {
 	t.Setenv("QUASAR_LLM_API", "responses")

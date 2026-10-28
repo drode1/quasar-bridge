@@ -42,6 +42,33 @@ func TestStoreIsolationExpiryAndReset(t *testing.T) {
 		t.Fatal("fresh turn missing")
 	}
 }
+
+func TestSessionIDFollowsDialogue(t *testing.T) {
+	s := New(DefaultConfig())
+	now := time.Unix(1000, 0)
+	s.now = func() time.Time { return now }
+	a := WithSpeaker(t.Context(), "a")
+	b := WithSpeaker(t.Context(), "b")
+	first, ticket := s.Begin(a)
+	s.Commit(a, ticket, "one", "answer", false)
+	next, ticket := s.Begin(a)
+	other, _ := s.Begin(b)
+	if first.SessionID == "" || first.SessionID != next.SessionID || first.SessionID == other.SessionID {
+		t.Fatal("session IDs do not match dialogue boundaries")
+	}
+	if !s.Clear(a, ticket) {
+		t.Fatal("could not reset dialogue")
+	}
+	reset := s.View(a)
+	if reset.SessionID == "" || reset.SessionID == first.SessionID {
+		t.Fatal("session ID survived dialogue reset")
+	}
+	now = now.Add(301 * time.Second)
+	expired, _ := s.Begin(a)
+	if expired.SessionID == "" || expired.SessionID == reset.SessionID {
+		t.Fatal("session ID survived dialogue expiry")
+	}
+}
 func TestStoreCancellationAndSupersededRequests(t *testing.T) {
 	s := New(DefaultConfig())
 	ctx, cancel := context.WithCancel(t.Context())

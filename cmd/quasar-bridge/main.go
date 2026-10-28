@@ -142,6 +142,7 @@ func main() {
 		BaseURL: cfg.LLMBaseURL, Model: cfg.LLMModel, APIKey: os.Getenv("QUASAR_LLM_API_KEY"),
 		API: cfg.LLMAPI, ReasoningEffort: cfg.LLMReasoningEffort,
 		MaxOutputTokens: cfg.LLMMaxOutputTokens, HostedTools: cfg.LLMHostedTools,
+		PiScript:       cfg.LLMPiScript,
 		ChatParameters: cfg.LLMChatParameters,
 	}
 	engine := &bridge.Engine{LLM: lc, Dialogue: dialogue.New(cfg.DialogueContext)}

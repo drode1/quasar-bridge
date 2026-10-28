@@ -141,6 +141,9 @@ func (e *Engine) Fallback(ctx context.Context, text string) (Resolution, error) 
 		answerer = e.Assistant
 	}
 	ctx, snapshot, ticket := e.dialogue().Start(ctx)
+	if snapshot.SessionID != "" {
+		ctx = llm.WithPiSession(ctx, snapshot.SessionID)
+	}
 	if !e.dialogue().Current(ctx, ticket) {
 		return r, context.Canceled
 	}

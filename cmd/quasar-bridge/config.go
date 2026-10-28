@@ -37,6 +37,7 @@ type config struct {
 	LLMBaseURL         string               `json:"llm_base_url"`
 	LLMModel           string               `json:"llm_model"`
 	LLMAPI             string               `json:"llm_api"`
+	LLMPiScript        string               `json:"llm_pi_script"`
 	LLMReasoningEffort string               `json:"llm_reasoning_effort"`
 	LLMMaxOutputTokens int                  `json:"llm_max_output_tokens"`
 	LLMHostedTools     []string             `json:"llm_hosted_tools"`
@@ -61,6 +62,7 @@ func readConfig(path string) (config, error) {
 		"QUASAR_MODE": &cfg.Mode, "QUASAR_LLM_BASE_URL": &cfg.LLMBaseURL,
 		"QUASAR_LLM_MODEL": &cfg.LLMModel, "QUASAR_HOME_WARM_AREA": &cfg.HomeWarmArea,
 		"QUASAR_LLM_API": &cfg.LLMAPI, "QUASAR_LLM_REASONING_EFFORT": &cfg.LLMReasoningEffort,
+		"QUASAR_LLM_PI_SCRIPT": &cfg.LLMPiScript,
 	} {
 		if value, ok := os.LookupEnv(name); ok {
 			*target = value
@@ -89,8 +91,11 @@ func readConfig(path string) (config, error) {
 	if cfg.LLMAPI == "" {
 		cfg.LLMAPI = "chat_completions"
 	}
-	if cfg.LLMAPI != "chat_completions" && cfg.LLMAPI != "responses" {
-		return cfg, errors.New("llm_api must be chat_completions or responses")
+	if cfg.LLMAPI != "chat_completions" && cfg.LLMAPI != "responses" && cfg.LLMAPI != "pi" {
+		return cfg, errors.New("llm_api must be chat_completions, responses or pi")
+	}
+	if cfg.LLMAPI == "pi" && strings.TrimSpace(cfg.LLMPiScript) == "" {
+		return cfg, errors.New("llm_pi_script is required for pi")
 	}
 	if len(cfg.LLMChatParameters) == 0 {
 		cfg.LLMChatParameters = nil
@@ -106,8 +111,8 @@ func readConfig(path string) (config, error) {
 		return cfg, errors.New("llm_max_output_tokens must be positive")
 	}
 	if cfg.LLMReasoningEffort != "" {
-		if cfg.LLMAPI != "responses" {
-			return cfg, errors.New("llm_reasoning_effort requires llm_api responses")
+		if cfg.LLMAPI != "responses" && cfg.LLMAPI != "pi" {
+			return cfg, errors.New("llm_reasoning_effort requires llm_api responses or pi")
 		}
 		if !slices.Contains([]string{"none", "minimal", "low", "medium", "high", "xhigh", "max"}, cfg.LLMReasoningEffort) {
 			return cfg, errors.New("invalid llm_reasoning_effort")
@@ -151,8 +156,14 @@ func readConfig(path string) (config, error) {
 		return cfg, errors.New("invalid LLM URL")
 	}
 	if cfg.Mode == "hybrid" {
-		if cfg.LLMBaseURL == "" || cfg.LLMModel == "" {
-			return cfg, errors.New("hybrid mode requires LLM URL and model")
+		if cfg.LLMModel == "" || (cfg.LLMAPI != "pi" && cfg.LLMBaseURL == "") {
+			return cfg, errors.New("hybrid mode requires LLM model and backend configuration")
+		}
+		if cfg.LLMAPI == "pi" {
+			provider, model, ok := strings.Cut(cfg.LLMModel, "/")
+			if !ok || provider == "" || model == "" {
+				return cfg, errors.New("pi model must be provider/model")
+			}
 		}
 		if endpoint := os.Getenv("QUASAR_HOME_MCP_URL"); endpoint != "" && !validEndpoint(endpoint, "http", "https") {
 			return cfg, errors.New("invalid QUASAR_HOME_MCP_URL")
