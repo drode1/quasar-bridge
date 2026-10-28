@@ -78,6 +78,7 @@ func (a *Agent) complete(ctx context.Context, messages []llm.Message, structured
 	messages = append([]llm.Message{{Role: "system", Content: system}}, conversation...)
 	count := 0
 	seen := map[string]bool{}
+	failed := map[string]string{}
 	if p, ok := a.Tools.(Prefetcher); ok {
 		user := ""
 		for i := len(messages) - 1; i >= 0; i-- {
@@ -100,7 +101,7 @@ func (a *Agent) complete(ctx context.Context, messages []llm.Message, structured
 		for _, function := range planned {
 			call := llm.ToolCall{ID: "context-" + uuid.NewV4().String(), Type: "function", Function: function}
 			seen[call.ID] = true
-			result, err := a.execute(ctx, call, historyRead, "context")
+			result, err := a.execute(ctx, call, historyRead, "context", failed)
 			if err != nil {
 				return "", err
 			}
@@ -154,7 +155,7 @@ func (a *Agent) complete(ctx context.Context, messages []llm.Message, structured
 			if err := ctx.Err(); err != nil {
 				return "", err
 			}
-			result, err := a.execute(ctx, call, historyRead, "model")
+			result, err := a.execute(ctx, call, historyRead, "model", failed)
 			if err != nil {
 				return "", err
 			}
@@ -165,9 +166,14 @@ func (a *Agent) complete(ctx context.Context, messages []llm.Message, structured
 	return "", errors.New("assistant tool round budget exceeded")
 }
 
-func (a *Agent) execute(ctx context.Context, call llm.ToolCall, historyRead *bool, phase string) (llm.Message, error) {
+func (a *Agent) execute(ctx context.Context, call llm.ToolCall, historyRead *bool, phase string, failed map[string]string) (llm.Message, error) {
 	if err := ctx.Err(); err != nil {
 		return llm.Message{}, err
+	}
+	key := call.Function.Name + "\x00" + call.Function.Arguments
+	if cached, ok := failed[key]; ok {
+		slog.Info("assistant_tool", "tool", call.Function.Name, "phase", phase, "ok", false, "cached", true, "elapsed_ms", 0)
+		return llm.Message{Role: "tool", ToolCallID: call.ID, Content: cached}, nil
 	}
 	start := time.Now()
 	var result any
@@ -186,6 +192,9 @@ func (a *Agent) execute(ctx context.Context, call llm.ToolCall, historyRead *boo
 	raw, encodeErr := json.Marshal(result)
 	if encodeErr != nil {
 		return llm.Message{}, errors.New("cannot encode tool result")
+	}
+	if err != nil {
+		failed[key] = string(raw)
 	}
 	name := "unknown"
 	for _, def := range a.Tools.Definitions() {

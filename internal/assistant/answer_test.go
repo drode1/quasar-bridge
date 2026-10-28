@@ -54,7 +54,7 @@ func TestAgentRejectsToolMarkupAfterFailedToolBudget(t *testing.T) {
 	if err == nil || answer != "" {
 		t.Fatalf("raw tool call accepted as final speech: answer=%q error=%v", answer, err)
 	}
-	if rounds != 4 || tools.calls != 3 {
+	if rounds != 4 || tools.calls != 1 {
 		t.Fatalf("unexpected retry: model rounds=%d tool calls=%d", rounds, tools.calls)
 	}
 	if strings.Contains(err.Error(), "example.org") {
