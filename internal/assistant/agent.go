@@ -79,13 +79,6 @@ func (a *Agent) complete(ctx context.Context, messages []llm.Message, structured
 	count := 0
 	seen := map[string]bool{}
 	failed := map[string]string{}
-	userText := ""
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == "user" {
-			userText = messages[i].Content
-			break
-		}
-	}
 	if p, ok := a.Tools.(Prefetcher); ok {
 		user := ""
 		for i := len(messages) - 1; i >= 0; i-- {
@@ -108,7 +101,7 @@ func (a *Agent) complete(ctx context.Context, messages []llm.Message, structured
 		for _, function := range planned {
 			call := llm.ToolCall{ID: "context-" + uuid.NewV4().String(), Type: "function", Function: function}
 			seen[call.ID] = true
-			result, err := a.execute(ctx, call, historyRead, "context", failed, userText)
+			result, err := a.execute(ctx, call, historyRead, "context", failed)
 			if err != nil {
 				return "", err
 			}
@@ -186,7 +179,7 @@ func (a *Agent) complete(ctx context.Context, messages []llm.Message, structured
 			if err := ctx.Err(); err != nil {
 				return "", err
 			}
-			result, err := a.execute(ctx, call, historyRead, "model", failed, userText)
+			result, err := a.execute(ctx, call, historyRead, "model", failed)
 			if err != nil {
 				return "", err
 			}
@@ -197,7 +190,7 @@ func (a *Agent) complete(ctx context.Context, messages []llm.Message, structured
 	return "", errors.New("assistant tool round budget exceeded")
 }
 
-func (a *Agent) execute(ctx context.Context, call llm.ToolCall, historyRead *bool, phase string, failed map[string]string, userText string) (llm.Message, error) {
+func (a *Agent) execute(ctx context.Context, call llm.ToolCall, historyRead *bool, phase string, failed map[string]string) (llm.Message, error) {
 	if err := ctx.Err(); err != nil {
 		return llm.Message{}, err
 	}
@@ -211,8 +204,6 @@ func (a *Agent) execute(ctx context.Context, call llm.ToolCall, historyRead *boo
 	var err error
 	if *historyRead && !a.allowedAfterHistory(call.Function.Name) {
 		err = errors.New("this tool is blocked after accessing private history in this answer")
-	} else if call.Function.Name == "read_webpage" && !urlWasMentioned(call.Function.Arguments, userText) {
-		err = errors.New("this page was not in the user's request")
 	} else {
 		result, err = a.Tools.Call(ctx, call.Function.Name, call.Function.Arguments)
 	}
@@ -237,30 +228,6 @@ func (a *Agent) execute(ctx context.Context, call llm.ToolCall, historyRead *boo
 	}
 	slog.Info("assistant_tool", "tool", name, "phase", phase, "ok", err == nil, "elapsed_ms", time.Since(start).Milliseconds())
 	return llm.Message{Role: "tool", ToolCallID: call.ID, Content: string(raw)}, nil
-}
-
-func urlWasMentioned(args, userText string) bool {
-	var p struct {
-		URL string `json:"url"`
-	}
-	if json.Unmarshal([]byte(args), &p) != nil || p.URL == "" {
-		return false
-	}
-	target := strings.ToLower(p.URL)
-	target = strings.TrimPrefix(strings.TrimPrefix(target, "https://"), "http://")
-	host := target
-	if i := strings.IndexAny(host, "/?#"); i >= 0 {
-		host = host[:i]
-	}
-	host = strings.TrimPrefix(host, "www.")
-	if host == "" {
-		return false
-	}
-	request := strings.ToLower(userText)
-	if strings.Contains(request, host) {
-		return true
-	}
-	return strings.Contains(request, target)
 }
 
 func (a *Agent) allowedAfterHistory(name string) bool {

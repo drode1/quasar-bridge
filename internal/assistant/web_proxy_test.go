@@ -4,7 +4,7 @@ import "testing"
 
 func TestProxyFromEnvAcceptsOnlySocks(t *testing.T) {
 	for _, tc := range []struct{ value, want string }{
-		{"socks5://10.0.0.5:1080", "10.0.0.5:1080"},
+		{"socks5://192.0.2.5:1080", "192.0.2.5:1080"},
 		{"socks5h://proxy.invalid:1080/", "proxy.invalid:1080"},
 		{"http://proxy.invalid:3128", ""},
 		{"", ""},
