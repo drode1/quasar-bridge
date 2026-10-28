@@ -79,6 +79,13 @@ func (a *Agent) complete(ctx context.Context, messages []llm.Message, structured
 	count := 0
 	seen := map[string]bool{}
 	failed := map[string]string{}
+	userText := ""
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "user" {
+			userText = messages[i].Content
+			break
+		}
+	}
 	if p, ok := a.Tools.(Prefetcher); ok {
 		user := ""
 		for i := len(messages) - 1; i >= 0; i-- {
@@ -101,7 +108,7 @@ func (a *Agent) complete(ctx context.Context, messages []llm.Message, structured
 		for _, function := range planned {
 			call := llm.ToolCall{ID: "context-" + uuid.NewV4().String(), Type: "function", Function: function}
 			seen[call.ID] = true
-			result, err := a.execute(ctx, call, historyRead, "context", failed)
+			result, err := a.execute(ctx, call, historyRead, "context", failed, userText)
 			if err != nil {
 				return "", err
 			}
@@ -113,6 +120,15 @@ func (a *Agent) complete(ctx context.Context, messages []llm.Message, structured
 			return "", err
 		}
 		tools := a.Tools.Definitions()
+		if len(failed) > 0 {
+			kept := make([]llm.Tool, 0, len(tools))
+			for _, def := range tools {
+				if _, broken := failed[def.Function.Name]; !broken {
+					kept = append(kept, def)
+				}
+			}
+			tools = kept
+		}
 		if *historyRead {
 			filtered := make([]llm.Tool, 0, len(tools))
 			for _, def := range tools {
@@ -141,8 +157,23 @@ func (a *Agent) complete(ctx context.Context, messages []llm.Message, structured
 			}
 			return strings.TrimSpace(msg.Content), nil
 		}
-		if len(tools) == 0 || len(msg.ToolCalls) > a.MaxCalls-count {
+		if len(msg.ToolCalls) > a.MaxCalls-count {
 			return "", errors.New("assistant tool call budget exceeded")
+		}
+		for _, call := range msg.ToolCalls {
+			if _, broken := failed[call.Function.Name]; broken {
+				continue
+			}
+			known := false
+			for _, def := range a.Tools.Definitions() {
+				if def.Function.Name == call.Function.Name {
+					known = true
+					break
+				}
+			}
+			if !known {
+				return "", errors.New("assistant requested an unknown tool")
+			}
 		}
 		for _, call := range msg.ToolCalls {
 			if call.ID == "" || len(call.ID) > 200 || seen[call.ID] || call.Type != "function" {
@@ -155,7 +186,7 @@ func (a *Agent) complete(ctx context.Context, messages []llm.Message, structured
 			if err := ctx.Err(); err != nil {
 				return "", err
 			}
-			result, err := a.execute(ctx, call, historyRead, "model", failed)
+			result, err := a.execute(ctx, call, historyRead, "model", failed, userText)
 			if err != nil {
 				return "", err
 			}
@@ -166,11 +197,11 @@ func (a *Agent) complete(ctx context.Context, messages []llm.Message, structured
 	return "", errors.New("assistant tool round budget exceeded")
 }
 
-func (a *Agent) execute(ctx context.Context, call llm.ToolCall, historyRead *bool, phase string, failed map[string]string) (llm.Message, error) {
+func (a *Agent) execute(ctx context.Context, call llm.ToolCall, historyRead *bool, phase string, failed map[string]string, userText string) (llm.Message, error) {
 	if err := ctx.Err(); err != nil {
 		return llm.Message{}, err
 	}
-	key := call.Function.Name + "\x00" + call.Function.Arguments
+	key := call.Function.Name
 	if cached, ok := failed[key]; ok {
 		slog.Info("assistant_tool", "tool", call.Function.Name, "phase", phase, "ok", false, "cached", true, "elapsed_ms", 0)
 		return llm.Message{Role: "tool", ToolCallID: call.ID, Content: cached}, nil
@@ -180,6 +211,8 @@ func (a *Agent) execute(ctx context.Context, call llm.ToolCall, historyRead *boo
 	var err error
 	if *historyRead && !a.allowedAfterHistory(call.Function.Name) {
 		err = errors.New("this tool is blocked after accessing private history in this answer")
+	} else if call.Function.Name == "read_webpage" && !urlWasMentioned(call.Function.Arguments, userText) {
+		err = errors.New("this page was not in the user's request")
 	} else {
 		result, err = a.Tools.Call(ctx, call.Function.Name, call.Function.Arguments)
 	}
@@ -204,6 +237,20 @@ func (a *Agent) execute(ctx context.Context, call llm.ToolCall, historyRead *boo
 	}
 	slog.Info("assistant_tool", "tool", name, "phase", phase, "ok", err == nil, "elapsed_ms", time.Since(start).Milliseconds())
 	return llm.Message{Role: "tool", ToolCallID: call.ID, Content: string(raw)}, nil
+}
+
+func urlWasMentioned(args, userText string) bool {
+	var p struct {
+		URL string `json:"url"`
+	}
+	if json.Unmarshal([]byte(args), &p) != nil || p.URL == "" {
+		return false
+	}
+	target := strings.ToLower(strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(strings.ToLower(p.URL), "https://"), "http://"), "/"))
+	if target == "" {
+		return false
+	}
+	return strings.Contains(strings.ToLower(userText), target)
 }
 
 func (a *Agent) allowedAfterHistory(name string) bool {

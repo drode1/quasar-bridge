@@ -28,7 +28,7 @@ func TestAgentReusesFailedToolResult(t *testing.T) {
 		}
 		return llm.Message{Content: "Страница недоступна."}, nil
 	})}
-	answer, err := agent.Complete(t.Context(), nil, false)
+	answer, err := agent.Complete(t.Context(), []llm.Message{{Role: "user", Content: "Прочитай https://example.com/page"}}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
