@@ -246,11 +246,21 @@ func urlWasMentioned(args, userText string) bool {
 	if json.Unmarshal([]byte(args), &p) != nil || p.URL == "" {
 		return false
 	}
-	target := strings.ToLower(strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(strings.ToLower(p.URL), "https://"), "http://"), "/"))
-	if target == "" {
+	target := strings.ToLower(p.URL)
+	target = strings.TrimPrefix(strings.TrimPrefix(target, "https://"), "http://")
+	host := target
+	if i := strings.IndexAny(host, "/?#"); i >= 0 {
+		host = host[:i]
+	}
+	host = strings.TrimPrefix(host, "www.")
+	if host == "" {
 		return false
 	}
-	return strings.Contains(strings.ToLower(userText), target)
+	request := strings.ToLower(userText)
+	if strings.Contains(request, host) {
+		return true
+	}
+	return strings.Contains(request, target)
 }
 
 func (a *Agent) allowedAfterHistory(name string) bool {
