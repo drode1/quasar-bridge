@@ -107,14 +107,7 @@ func (c *Client) pi(ctx context.Context, messages []Message, structured bool, to
 	}
 	seen := make(map[string]bool, len(message.ToolCalls))
 	for _, call := range message.ToolCalls {
-		allowed := false
-		for _, tool := range tools {
-			if tool.Type == "function" && tool.Function.Name == call.Function.Name {
-				allowed = true
-				break
-			}
-		}
-		if strings.TrimSpace(call.ID) == "" || seen[call.ID] || call.Type != "function" || !allowed || strings.TrimSpace(call.Function.Name) == "" || !piJSONObject(call.Function.Arguments) {
+		if strings.TrimSpace(call.ID) == "" || seen[call.ID] || call.Type != "function" || strings.TrimSpace(call.Function.Name) == "" || !piJSONObject(call.Function.Arguments) {
 			return Message{}, errors.New("invalid Pi function call")
 		}
 		seen[call.ID] = true

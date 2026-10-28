@@ -86,7 +86,7 @@ func TestPiResponses(t *testing.T) {
 	}{
 		{"text", `{"message":{"role":"assistant","content":"answer"}}`, false, nil, true},
 		{"call", `{"message":{"role":"assistant","content":"","tool_calls":[{"id":"1","type":"function","function":{"name":"lookup","arguments":"{}"}}]}}`, false, tools, true},
-		{"unknown call", `{"message":{"role":"assistant","content":"","tool_calls":[{"id":"1","type":"function","function":{"name":"lookup","arguments":"{}"}}]}}`, false, nil, false},
+		{"call to withdrawn tool", `{"message":{"role":"assistant","content":"","tool_calls":[{"id":"1","type":"function","function":{"name":"lookup","arguments":"{}"}}]}}`, false, nil, true},
 		{"bad arguments", `{"message":{"role":"assistant","content":"","tool_calls":[{"id":"1","type":"function","function":{"name":"lookup","arguments":"[]"}}]}}`, false, tools, false},
 		{"duplicate IDs", `{"message":{"role":"assistant","content":"","tool_calls":[{"id":"1","type":"function","function":{"name":"lookup","arguments":"{}"}},{"id":"1","type":"function","function":{"name":"lookup","arguments":"{}"}}]}}`, false, tools, false},
 		{"invalid structured", `{"message":{"role":"assistant","content":"[]"}}`, true, nil, false},
