@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"quasarbridge/internal/dialogue"
 	"quasarbridge/internal/llm"
 )
 
@@ -17,6 +18,7 @@ func TestStripModelPrefix(t *testing.T) {
 		{"Спроси у нейросети который час", "который час"},
 		{"спроси у своей модели, что такое HTTP", "что такое HTTP"},
 		{"спроси модель\nпочему небо голубое", "почему небо голубое"},
+		{"спроси нейросеть: -2 в третьей степени", "-2 в третьей степени"},
 		{"спроси нейросеть", "спроси нейросеть"}, // после срезания пусто — оставляем исходное
 		{"какая завтра погода", "какая завтра погода"},
 		{"включи свет в гостиной", "включи свет в гостиной"},
@@ -58,5 +60,35 @@ func TestStripModelPrefixKeepsHistoryOriginal(t *testing.T) {
 	e.Resolve(t.Context(), "а что такое TLS?")
 	if len(prompts) < 2 || !strings.Contains(prompts[1], "спроси у нейросети: что такое HTTP") {
 		t.Fatalf("dialogue history lost original text: %q", prompts)
+	}
+}
+
+// Повтор по команде «используй нейросеть» тоже получает срезанный вопрос.
+func TestRetryStripsModelPrefix(t *testing.T) {
+	var prompts []string
+	e := &Engine{
+		StripPrefixes: DefaultStripPrefixes(),
+		Dialogue:      dialogue.New(dialogue.DefaultConfig()),
+		LLM: completionFunc(func(_ context.Context, m []llm.Message, structured bool) (string, error) {
+			if structured {
+				return `{}`, nil
+			}
+			for _, message := range m {
+				if message.Role == "user" {
+					prompts = append(prompts, message.Content)
+				}
+			}
+			return "Небо голубое из-за рассеяния света.", nil
+		}),
+	}
+	ctx := dialogue.WithSpeaker(t.Context(), "a")
+	_, first := e.Dialogue.Begin(ctx)
+	e.Dialogue.CaptureReplay(ctx, first, "спроси у нейросети: почему небо голубое", "Не могу ответить.", true, false, false, false)
+	retryCtx, _, ticket := e.Dialogue.Start(ctx)
+	if _, err := e.retryQuestion(retryCtx, ticket); err != nil {
+		t.Fatal(err)
+	}
+	if len(prompts) == 0 || prompts[len(prompts)-1] != "почему небо голубое" {
+		t.Fatalf("retry sent %q, want stripped text", prompts)
 	}
 }

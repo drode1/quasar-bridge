@@ -53,7 +53,9 @@ func (e *Engine) stripModelPrefix(text string) string {
 		if prefix == "" || !strings.HasPrefix(low, prefix) {
 			continue
 		}
-		cut := strings.TrimLeft(t[len(prefix):], " \t\r\n,.:;!—–-")
+		// Дефис и короткое тире не разделители: в «: -2 в третьей степени»
+		// минус относится к вопросу.
+		cut := strings.TrimLeft(t[len(prefix):], " \t\r\n,.:;!—")
 		if cut != "" {
 			return cut
 		}
