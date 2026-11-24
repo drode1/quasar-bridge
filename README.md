@@ -150,6 +150,19 @@ Quasar Bridge учит Яндекс Станцию отвечать с помо�
 Подключите конфигурацию в `/config/config.json`, а каталог для журнала и других
 сохраняемых данных - в `/data`. Ключ модели передавайте через `QUASAR_LLM_API_KEY`.
 
+Для [OpenCode Go](https://opencode.ai/docs/console/harnesses#sessions) передайте
+`QUASAR_LLM_HEADERS` как JSON-объект. Укажите постоянный идентификатор сессии
+для экземпляра Bridge и отдельный `User-Agent`:
+
+```sh
+QUASAR_LLM_HEADERS='{"x-opencode-session":"ses_quasar_bridge","User-Agent":"quasar-bridge/1.0"}'
+```
+
+Заголовки применяются к запросам модели и каталога в режимах `chat_completions`
+и `responses`. `Authorization` по-прежнему задаёт `QUASAR_LLM_API_KEY`.
+В режиме подписки `chatgpt` пользовательские заголовки не поддерживаются.
+Примените изменения переменных окружения перезапуском Bridge.
+
 ## Установка
 
 Для установки Quasar Bridge на колонку достаточно стандартных утилит прошивки.

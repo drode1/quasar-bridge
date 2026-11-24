@@ -56,6 +56,7 @@ type Client struct {
 	MaxOutputTokens int
 	HostedTools     []string
 	ChatParameters  map[string]any
+	Headers         map[string]string
 	HTTP            *http.Client
 	// AccessToken supplies renewable subscription credentials for the ChatGPT API.
 	// APIKey is never used in this mode.
@@ -202,6 +203,14 @@ func (c *Client) chatCompletions(ctx context.Context, messages []Message, struct
 	return m, nil
 }
 
+func (c *Client) applyProviderHeaders(req *http.Request) {
+	if c.API != "chatgpt" {
+		for name, value := range c.Headers {
+			req.Header.Set(name, value)
+		}
+	}
+}
+
 func (c *Client) post(ctx context.Context, path string, request any) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
@@ -234,6 +243,7 @@ func (c *Client) post(ctx context.Context, path string, request any) ([]byte, er
 	if err != nil {
 		return nil, errors.New("invalid LLM endpoint")
 	}
+	c.applyProviderHeaders(req)
 	req.Header.Set("Content-Type", "application/json")
 	if apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+apiKey)
@@ -244,8 +254,9 @@ func (c *Client) post(ctx context.Context, path string, request any) ([]byte, er
 	}
 	if c.API == "chatgpt" {
 		req.Header.Set("Accept", "text/event-stream")
-		// An OAuth credential is valid only for this endpoint. A redirect must not
-		// forward it or turn an inference request into a different operation.
+	}
+	if c.API == "chatgpt" || len(c.Headers) > 0 {
+		// OAuth credentials and custom provider headers must not follow redirects.
 		clone := *hc
 		clone.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 		hc = &clone

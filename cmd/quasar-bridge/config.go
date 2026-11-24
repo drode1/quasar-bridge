@@ -4,6 +4,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"net"
+	"net/http"
 	"net/netip"
 	"net/url"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"github.com/skrashevich/quasar-bridge/internal/dialogue"
 	"github.com/skrashevich/quasar-bridge/internal/journal"
 	"github.com/skrashevich/quasar-bridge/internal/llm"
+	"golang.org/x/net/http/httpguts"
 )
 
 type progressConfig struct {
@@ -56,6 +58,8 @@ type config struct {
 	HomeWarmArea       string               `json:"home_warm_area"`
 	ListenAfterReply   bool                 `json:"listen_after_reply"`
 	Routing            bridge.RoutingConfig `json:"routing"`
+
+	llmHeaders map[string]string
 }
 
 func readConfig(path string) (config, error) {
@@ -90,6 +94,14 @@ func parseConfig(raw []byte, modelOptional bool) (config, error) {
 			*target = value
 		}
 	}
+	headers, err := readLLMHeaders(os.Getenv("QUASAR_LLM_HEADERS"))
+	if err != nil {
+		return cfg, err
+	}
+	if len(headers) > 0 && cfg.LLMAPI == "chatgpt" {
+		return cfg, errors.New("QUASAR_LLM_HEADERS is not supported in chatgpt mode")
+	}
+	cfg.llmHeaders = headers
 	if value, ok := os.LookupEnv("QUASAR_LLM_CHAT_PARAMETERS"); ok {
 		// Replace the complete map: {} also clears parameters from config.json.
 		cfg.LLMChatParameters = nil
@@ -231,6 +243,37 @@ func parseConfig(raw []byte, modelOptional bool) (config, error) {
 	}
 	return cfg, nil
 }
+
+func readLLMHeaders(raw string) (map[string]string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	var fields map[string]*string
+	if err := json.Unmarshal([]byte(raw), &fields); err != nil || fields == nil {
+		return nil, errors.New("QUASAR_LLM_HEADERS must be a JSON object of HTTP header names and string values")
+	}
+	if len(fields) == 0 {
+		return nil, nil
+	}
+	headers := make(map[string]string, len(fields))
+	for name, value := range fields {
+		if !httpguts.ValidHeaderFieldName(name) || value == nil || !httpguts.ValidHeaderFieldValue(*value) {
+			return nil, errors.New("QUASAR_LLM_HEADERS contains an invalid HTTP header")
+		}
+		name = http.CanonicalHeaderKey(name)
+		switch name {
+		case "Authorization", "Proxy-Authorization", "Host", "Content-Type", "Content-Length",
+			"Transfer-Encoding", "Connection", "Proxy-Connection", "Keep-Alive", "Te", "Trailer", "Upgrade":
+			return nil, errors.New("QUASAR_LLM_HEADERS cannot override authorization or protocol headers")
+		}
+		if _, exists := headers[name]; exists {
+			return nil, errors.New("QUASAR_LLM_HEADERS contains duplicate HTTP header names")
+		}
+		headers[name] = *value
+	}
+	return headers, nil
+}
+
 func validEndpoint(raw string, schemes ...string) bool {
 	u, err := url.Parse(raw)
 	if err != nil || u.Hostname() == "" || u.User != nil || u.Fragment != "" {

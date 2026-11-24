@@ -18,7 +18,7 @@ func newLLMClient(cfg config, apiKey string) *llm.Client {
 		BaseURL: cfg.LLMBaseURL, Model: cfg.LLMModel, APIKey: apiKey,
 		API: cfg.LLMAPI, ReasoningEffort: cfg.LLMReasoningEffort,
 		MaxOutputTokens: cfg.LLMMaxOutputTokens, HostedTools: cfg.LLMHostedTools,
-		ChatParameters: cfg.LLMChatParameters,
+		ChatParameters: cfg.LLMChatParameters, Headers: cfg.llmHeaders,
 	}
 	if cfg.LLMAPI == "chatgpt" {
 		store := &chatgpt.Store{Path: cfg.LLMChatGPTAuthFile}

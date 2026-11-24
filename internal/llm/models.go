@@ -56,6 +56,7 @@ func (c *Client) Models(ctx context.Context) ([]Model, error) {
 		return nil, errors.New("invalid LLM model catalog endpoint")
 	}
 	req.Header.Set("Accept", "application/json")
+	c.applyProviderHeaders(req)
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
