@@ -142,6 +142,14 @@ Quasar Bridge учит Яндекс Станцию отвечать с помо�
 
 </details>
 
+## Контейнер
+
+[GitHub Actions](https://github.com/drode1/quasar-bridge/actions/workflows/container.yml)
+публикует `ghcr.io/drode1/quasar-bridge:sha-<commit>` для `linux/amd64` и `linux/arm64`.
+Тег и digest доступны в сводке запуска. Dockerfile собирает штатный Go-бинарник.
+Подключите конфигурацию в `/config/config.json`, а каталог для журнала и других
+сохраняемых данных - в `/data`. Ключ модели передавайте через `QUASAR_LLM_API_KEY`.
+
 ## Установка
 
 Для установки Quasar Bridge на колонку достаточно стандартных утилит прошивки.
