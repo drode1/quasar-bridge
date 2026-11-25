@@ -105,12 +105,10 @@ func localDiagnostics(next http.HandlerFunc) http.HandlerFunc {
 	return diagnosticsAccess(nil, next)
 }
 
-func registerDiagnostics(mux *http.ServeMux, logs *diagnosticLog, status func() map[string]any, network ...func() bool) {
-	var access func() bool
-	if len(network) > 0 {
-		access = network[0]
+func registerDiagnostics(mux *http.ServeMux, logs *diagnosticLog, status func() map[string]any, access func() bool, allowedOrigin ...string) {
+	guard := func(next http.HandlerFunc) http.HandlerFunc {
+		return diagnosticsAccess(access, next, allowedOrigin...)
 	}
-	guard := func(next http.HandlerFunc) http.HandlerFunc { return diagnosticsAccess(access, next) }
 	mux.HandleFunc("GET /diagnostics", guard(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/diagnostics/", http.StatusTemporaryRedirect)
 	}))

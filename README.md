@@ -149,6 +149,9 @@ Quasar Bridge учит Яндекс Станцию отвечать с помо�
 Тег и digest доступны в сводке запуска. Dockerfile собирает штатный Go-бинарник.
 Подключите конфигурацию в `/config/config.json`, а каталог для журнала и других
 сохраняемых данных - в `/data`. Ключ модели передавайте через `QUASAR_LLM_API_KEY`.
+Для панели за HTTPS reverse proxy задайте `diagnostics.origin` точным внешним
+HTTPS origin и включите `diagnostics.network_access`. Сам Quasar Bridge не
+ограничивает адреса клиентов для такого origin. Ограничьте доступ на reverse proxy.
 
 Для [OpenCode Go](https://opencode.ai/docs/console/harnesses#sessions) передайте
 `QUASAR_LLM_HEADERS` как JSON-объект. Укажите постоянный идентификатор сессии

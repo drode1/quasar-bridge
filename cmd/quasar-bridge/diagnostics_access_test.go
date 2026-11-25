@@ -16,7 +16,7 @@ func TestDiagnosticsNetworkAccessAppliesThroughVoiceTools(t *testing.T) {
 	c := configurationFixture(t, `{}`)
 	tools := &assistant.Tools{Config: assistant.DefaultConfig(), Configuration: c}
 	mux := http.NewServeMux()
-	registerDiagnostics(mux, newDiagnosticLog(1024), func() map[string]any { return nil }, c.diagnosticsNetworkAccess)
+	registerDiagnostics(mux, newDiagnosticLog(1024), func() map[string]any { return nil }, c.diagnosticsNetworkAccess, "")
 	checkAccess := func(want int) {
 		t.Helper()
 		req := httptest.NewRequest("GET", "http://192.0.2.10:2704/diagnostics/logs", nil)
@@ -79,6 +79,9 @@ func TestDiagnosticsConfigurationDefaultsAndValidation(t *testing.T) {
 		`{"diagnostics":{"port":0}}`, `{"diagnostics":{"port":-1}}`, `{"diagnostics":{"port":65536}}`,
 		`{"diagnostics":{"port":1.5}}`, `{"diagnostics":{"network_access":"true"}}`, `{"diagnostics":{"unexpected":true}}`,
 		`{"diagnostics":null}`, `{"diagnostics":{"port":null}}`,
+		`{"diagnostics":{"origin":"http://quasar.example","network_access":true}}`,
+		`{"diagnostics":{"origin":"https://quasar.example/path","network_access":true}}`,
+		`{"diagnostics":{"origin":"https://quasar.example","network_access":false}}`,
 	} {
 		if _, err := parseConfig([]byte(body), false); err == nil {
 			t.Errorf("invalid diagnostics configuration accepted: %s", body)
@@ -88,6 +91,9 @@ func TestDiagnosticsConfigurationDefaultsAndValidation(t *testing.T) {
 		if _, err := parseConfig([]byte(`{"diagnostics":{"port":`+port+`}}`), false); err != nil {
 			t.Errorf("valid port %s rejected: %v", port, err)
 		}
+	}
+	if _, err := parseConfig([]byte(`{"diagnostics":{"origin":"https://quasar.example","network_access":true}}`), false); err != nil {
+		t.Errorf("valid diagnostics origin rejected: %v", err)
 	}
 }
 
@@ -147,9 +153,9 @@ func TestDiagnosticsRejectsForeignOrigin(t *testing.T) {
 
 func TestDiagnosticsNetworkGuard(t *testing.T) {
 	for _, tc := range []struct {
-		name, remote, host, origin, fetchSite string
-		network                               bool
-		want                                  int
+		name, remote, host, origin, fetchSite, configuredOrigin string
+		network                                                 bool
+		want                                                    int
 	}{
 		{name: "local default", remote: "127.0.0.1:12345", host: "localhost:2704", want: 204},
 		{name: "local IPv6", remote: "[::1]:12345", host: "[::1]:2704", want: 204},
@@ -163,6 +169,10 @@ func TestDiagnosticsNetworkGuard(t *testing.T) {
 		{name: "cross site", remote: "192.0.2.20:12345", host: "192.0.2.10:2704", fetchSite: "cross-site", network: true, want: 403},
 		{name: "DNS rebinding host", remote: "192.0.2.20:12345", host: "attacker.example:2704", network: true, want: 403},
 		{name: "malformed peer", remote: "unknown", host: "192.0.2.10:2704", network: true, want: 403},
+		{name: "configured HTTPS dashboard origin", remote: "172.20.0.2:12345", host: "quasar.eremezov.ru", origin: "https://quasar.eremezov.ru", configuredOrigin: "https://quasar.eremezov.ru", network: true, want: 204},
+		{name: "configured dashboard host without matching origin", remote: "172.20.0.2:12345", host: "quasar.eremezov.ru", origin: "https://attacker.example", configuredOrigin: "https://quasar.eremezov.ru", network: true, want: 403},
+		{name: "configured dashboard rejects cross site", remote: "172.20.0.2:12345", host: "quasar.eremezov.ru", origin: "https://quasar.eremezov.ru", fetchSite: "cross-site", configuredOrigin: "https://quasar.eremezov.ru", network: true, want: 403},
+		{name: "unconfigured dashboard host", remote: "172.20.0.2:12345", host: "quasar.eremezov.ru", network: true, want: 403},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", "http://"+tc.host+"/diagnostics/logs", nil)
@@ -170,7 +180,7 @@ func TestDiagnosticsNetworkGuard(t *testing.T) {
 			req.Header.Set("Origin", tc.origin)
 			req.Header.Set("Sec-Fetch-Site", tc.fetchSite)
 			w := httptest.NewRecorder()
-			diagnosticsAccess(func() bool { return tc.network }, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })(w, req)
+			diagnosticsAccess(func() bool { return tc.network }, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }, tc.configuredOrigin)(w, req)
 			if w.Code != tc.want {
 				t.Fatalf("got %d, want %d", w.Code, tc.want)
 			}

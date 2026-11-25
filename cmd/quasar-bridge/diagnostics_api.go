@@ -33,6 +33,7 @@ type diagnosticControl struct {
 	MusicQueue    *assistant.MusicQueue
 	Status        func() map[string]any
 	AirPlay       *airPlayControl
+	Origin        string
 	Network       func() bool
 	QueryBusy     *atomic.Bool
 	YandexQuery   func(context.Context, string, *queryDialog) (string, error)
@@ -47,7 +48,7 @@ func registerDiagnosticsAPI(mux *http.ServeMux, control diagnosticControl) {
 		control.QueryBusy = new(atomic.Bool)
 	}
 	register := func(pattern string, handler http.HandlerFunc) {
-		mux.HandleFunc(pattern, diagnosticsAccess(control.Network, handler))
+		mux.HandleFunc(pattern, diagnosticsAccess(control.Network, handler, control.Origin))
 	}
 	if control.ChatGPT != nil {
 		control.ChatGPT.register(mux, register, control.Configuration)

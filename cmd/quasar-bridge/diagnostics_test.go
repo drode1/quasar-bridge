@@ -73,7 +73,7 @@ func TestDiagnosticPacketEndpoint(t *testing.T) {
 	id := l.packets.add(raw, wire.ServerToClient)
 	slog.New(slog.NewJSONHandler(l, nil)).Info("frame", "event", "StreamControl", "packet_id", id)
 	mux := http.NewServeMux()
-	registerDiagnostics(mux, l, func() map[string]any { return nil })
+	registerDiagnostics(mux, l, func() map[string]any { return nil }, nil)
 	for _, path := range []string{"/diagnostics/logs", "/diagnostics/download"} {
 		res := diagnosticRequest(mux, path)
 		if strings.Contains(res.Body.String(), "private") || !strings.Contains(res.Body.String(), "packet_id") {
@@ -126,7 +126,7 @@ func TestDiagnosticsExposeLoggerAndLiveStateWithoutReadingConfig(t *testing.T) {
 	mux := http.NewServeMux()
 	registerDiagnostics(mux, l, func() map[string]any {
 		return map[string]any{"connected": connected, "state": "running"}
-	})
+	}, nil)
 	response := diagnosticRequest(mux, "/diagnostics/logs")
 	var first diagnosticSnapshot
 	if err := json.Unmarshal(response.Body.Bytes(), &first); err != nil || response.Code != 200 {
@@ -160,7 +160,7 @@ func TestDiagnosticsExposeLoggerAndLiveStateWithoutReadingConfig(t *testing.T) {
 
 func TestDiagnosticsRequireLoopbackAndLocalBrowserHost(t *testing.T) {
 	mux := http.NewServeMux()
-	registerDiagnostics(mux, newDiagnosticLog(1024), func() map[string]any { return nil })
+	registerDiagnostics(mux, newDiagnosticLog(1024), func() map[string]any { return nil }, nil)
 	for _, path := range []string{"/diagnostics/", "/diagnostics/logs", "/diagnostics/logs/1?run=test", "/diagnostics/download", "/diagnostics/app.js"} {
 		for _, tc := range []struct{ remote, host, fetchSite string }{
 			{"192.0.2.2:12345", "localhost:18443", ""},
@@ -193,7 +193,7 @@ func TestDiagnosticsPreserveMarkupAsLogText(t *testing.T) {
 	logs := newDiagnosticLog(256)
 	_, _ = io.WriteString(logs, entry)
 	mux := http.NewServeMux()
-	registerDiagnostics(mux, logs, func() map[string]any { return nil })
+	registerDiagnostics(mux, logs, func() map[string]any { return nil }, nil)
 
 	response := diagnosticRequest(mux, "/diagnostics/logs")
 	var snapshot diagnosticSnapshot

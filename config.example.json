@@ -2,7 +2,8 @@
   "listen": "localhost:8443",
   "diagnostics": {
     "network_access": false,
-    "port": 2704
+    "port": 2704,
+    "origin": ""
   },
   "upstream": "wss://uniproxy.alice.yandex.net/uni.ws",
   "mode": "hybrid",

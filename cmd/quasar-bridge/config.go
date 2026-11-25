@@ -27,8 +27,9 @@ type progressConfig struct {
 }
 
 type diagnosticsConfig struct {
-	NetworkAccess bool `json:"network_access"`
-	Port          int  `json:"port"`
+	NetworkAccess bool   `json:"network_access"`
+	Port          int    `json:"port"`
+	Origin        string `json:"origin,omitempty"`
 }
 
 type config struct {
@@ -225,6 +226,9 @@ func parseConfig(raw []byte, modelOptional bool) (config, error) {
 	if cfg.Diagnostics.Port < 1 || cfg.Diagnostics.Port > 65535 {
 		return cfg, errors.New("diagnostics.port must be in 1..65535")
 	}
+	if cfg.Diagnostics.Origin != "" && (!validDiagnosticsOrigin(cfg.Diagnostics.Origin) || !cfg.Diagnostics.NetworkAccess) {
+		return cfg, errors.New("diagnostics.origin requires an HTTPS origin and network_access enabled")
+	}
 	if err := cfg.DialogueContext.Validate(); err != nil {
 		return cfg, err
 	}
@@ -242,6 +246,12 @@ func parseConfig(raw []byte, modelOptional bool) (config, error) {
 		return cfg, err
 	}
 	return cfg, nil
+}
+func validDiagnosticsOrigin(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && u.Scheme == "https" && u.Host != "" && u.Hostname() != "" &&
+		u.User == nil && u.Path == "" && u.RawPath == "" && u.RawQuery == "" &&
+		!u.ForceQuery && u.Fragment == "" && u.String() == raw
 }
 
 func readLLMHeaders(raw string) (map[string]string, error) {

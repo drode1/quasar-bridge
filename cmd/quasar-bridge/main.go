@@ -414,9 +414,9 @@ func main() {
 		result["diagnostics"] = map[string]any{"network_access": configuration.diagnosticsNetworkAccess(), "port": cfg.Diagnostics.Port, "address": panel.Address()}
 		return result
 	}
-	panelControl := diagnosticControl{ChatGPT: &panelChatGPT{store: chatgpt.Store{Path: cfg.LLMChatGPTAuthFile}}, Configuration: configuration, Engine: engine, Logs: logs, MusicQueue: musicQueue, Status: panelStatus, AirPlay: airPlay, Network: configuration.diagnosticsNetworkAccess, QueryBusy: new(atomic.Bool), YandexQuery: yandexQuery, Dialogs: newQueryDialogs(time.Duration(cfg.DialogueContext.TTLSeconds) * time.Second)}
+	panelControl := diagnosticControl{ChatGPT: &panelChatGPT{store: chatgpt.Store{Path: cfg.LLMChatGPTAuthFile}}, Configuration: configuration, Engine: engine, Logs: logs, MusicQueue: musicQueue, Status: panelStatus, AirPlay: airPlay, Network: configuration.diagnosticsNetworkAccess, Origin: cfg.Diagnostics.Origin, QueryBusy: new(atomic.Bool), YandexQuery: yandexQuery, Dialogs: newQueryDialogs(time.Duration(cfg.DialogueContext.TTLSeconds) * time.Second)}
 	registerPanel := func(m *http.ServeMux) {
-		registerDiagnostics(m, diagnosticLogs, func() map[string]any { return airPlayHealth(airPlay) }, configuration.diagnosticsNetworkAccess)
+		registerDiagnostics(m, diagnosticLogs, func() map[string]any { return airPlayHealth(airPlay) }, configuration.diagnosticsNetworkAccess, cfg.Diagnostics.Origin)
 		registerDiagnosticsAPI(m, panelControl)
 	}
 	registerPanel(mux)
@@ -424,7 +424,7 @@ func main() {
 	registerPanel(panelMux)
 	panelMux.HandleFunc("GET /{$}", diagnosticsAccess(configuration.diagnosticsNetworkAccess, func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/diagnostics/", http.StatusTemporaryRedirect)
-	}))
+	}, cfg.Diagnostics.Origin))
 	panel = newDiagnosticsListener(cfg.Diagnostics.Port, panelMux)
 	configuration.applyDiagnostics = panel.SetNetworkAccess
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
