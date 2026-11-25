@@ -27,6 +27,7 @@ type Controller struct {
 	Tools        ToolCaller
 	Planner      Planner
 	Domains      []string
+	Kettle       *KettleScripts
 	exposureMu   sync.Mutex
 	guideMu      sync.Mutex
 	guidesLoaded bool
@@ -121,6 +122,11 @@ func (c *Controller) Handle(ctx context.Context, text string) (string, error) {
 func (c *Controller) HandleDialogue(ctx context.Context, text string, history []llm.Message) (string, error) {
 	if err := c.guides(ctx); err != nil {
 		return "", err
+	}
+	if c.Kettle != nil {
+		if op, temperature, ok := parseKettleCommand(text); ok {
+			return c.runKettle(ctx, op, temperature)
+		}
 	}
 	inventory := Controller{Tools: c.Tools, Planner: c.Planner, Domains: c.Domains}
 	if len(inventory.Domains) == 0 {

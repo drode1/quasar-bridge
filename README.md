@@ -268,6 +268,23 @@ LLM-сервера и сохранит рабочие параметры для 
 
 [Подробнее о настройке и требованиях к MCP-серверу](https://github.com/skrashevich/quasar-bridge/wiki/Home-Assistant#home-assistant-mcp).
 
+### Управление чайником
+
+В `config.json` укажите три сценария Home Assistant:
+
+```json
+"home_kettle_scripts": {
+  "stop": "script.kettle_stop",
+  "heat": "script.kettle_heat",
+  "boil": "script.kettle_boil"
+}
+```
+
+Разрешите эти сценарии в Assist. `heat` принимает поле `temperature` с целым
+числом от 40 до 99 °C. Добавьте правило `routing.rules`, отправляющее команды
+«Выключи чайник», «Вскипяти чайник» и «Поставь чайник на 70 градусов» в `home`,
+и перезапустите мост. Эти команды вызывают сценарии без участия модели.
+
 ## AirPlay
 
 Скажите «Алиса, включи эйрплей», затем выберите колонку в списке AirPlay

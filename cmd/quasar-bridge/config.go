@@ -15,6 +15,7 @@ import (
 	"github.com/skrashevich/quasar-bridge/internal/bridge"
 	"github.com/skrashevich/quasar-bridge/internal/chatgpt"
 	"github.com/skrashevich/quasar-bridge/internal/dialogue"
+	"github.com/skrashevich/quasar-bridge/internal/home"
 	"github.com/skrashevich/quasar-bridge/internal/journal"
 	"github.com/skrashevich/quasar-bridge/internal/llm"
 	"golang.org/x/net/http/httpguts"
@@ -57,6 +58,7 @@ type config struct {
 	LLMStripPrefixes   []string             `json:"llm_strip_prefixes"`
 	LLMTTSMarkup       bool                 `json:"llm_tts_markup"`
 	HomeWarmArea       string               `json:"home_warm_area"`
+	HomeKettleScripts  *home.KettleScripts  `json:"home_kettle_scripts,omitempty"`
 	ListenAfterReply   bool                 `json:"listen_after_reply"`
 	Routing            bridge.RoutingConfig `json:"routing"`
 
@@ -228,6 +230,9 @@ func parseConfig(raw []byte, modelOptional bool) (config, error) {
 	}
 	if cfg.Diagnostics.Origin != "" && (!validDiagnosticsOrigin(cfg.Diagnostics.Origin) || !cfg.Diagnostics.NetworkAccess) {
 		return cfg, errors.New("diagnostics.origin requires an HTTPS origin and network_access enabled")
+	}
+	if err := cfg.HomeKettleScripts.Validate(); err != nil {
+		return cfg, err
 	}
 	if err := cfg.DialogueContext.Validate(); err != nil {
 		return cfg, err
