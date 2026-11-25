@@ -28,6 +28,7 @@ type Controller struct {
 	Planner      Planner
 	Domains      []string
 	Kettle       *KettleScripts
+	LightModes   LightModes
 	exposureMu   sync.Mutex
 	guideMu      sync.Mutex
 	guidesLoaded bool
@@ -127,6 +128,9 @@ func (c *Controller) HandleDialogue(ctx context.Context, text string, history []
 		if op, temperature, ok := parseKettleCommand(text); ok {
 			return c.runKettle(ctx, op, temperature)
 		}
+	}
+	if selector, mode, ok := c.LightModes.command(text); ok {
+		return c.runLightMode(ctx, selector, mode)
 	}
 	inventory := Controller{Tools: c.Tools, Planner: c.Planner, Domains: c.Domains}
 	if len(inventory.Domains) == 0 {

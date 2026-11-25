@@ -59,6 +59,7 @@ type config struct {
 	LLMTTSMarkup       bool                 `json:"llm_tts_markup"`
 	HomeWarmArea       string               `json:"home_warm_area"`
 	HomeKettleScripts  *home.KettleScripts  `json:"home_kettle_scripts,omitempty"`
+	HomeLightModes     home.LightModes      `json:"home_light_modes,omitempty"`
 	ListenAfterReply   bool                 `json:"listen_after_reply"`
 	Routing            bridge.RoutingConfig `json:"routing"`
 
@@ -232,6 +233,9 @@ func parseConfig(raw []byte, modelOptional bool) (config, error) {
 		return cfg, errors.New("diagnostics.origin requires an HTTPS origin and network_access enabled")
 	}
 	if err := cfg.HomeKettleScripts.Validate(); err != nil {
+		return cfg, err
+	}
+	if err := cfg.HomeLightModes.Compile(); err != nil {
 		return cfg, err
 	}
 	if err := cfg.DialogueContext.Validate(); err != nil {
